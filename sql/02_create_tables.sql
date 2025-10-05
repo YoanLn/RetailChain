@@ -9,8 +9,10 @@ CREATE TABLE dwh.dim_date (
     month_name VARCHAR(20),
     quarter_number INTEGER NOT NULL,
     day_of_week INTEGER NOT NULL,
-    is_weekend BOOLEAN NOT NULL
-    -- Ajoutez vos colonnes additionnelles ici
+    is_weekend BOOLEAN NOT NULL,
+    week_number INTEGER,        -- Pour analyses hebdomadaires
+    day_name VARCHAR(10),       -- Nom du jour (Lundi, Mardi...)
+    is_holiday BOOLEAN          -- Jour férié ou non
 );
 
 -- Dimension Customer (colonnes minimum)
@@ -19,8 +21,12 @@ CREATE TABLE dwh.dim_customer (
     customer_business_key INTEGER NOT NULL,
     first_name VARCHAR(100),
     last_name VARCHAR(100),
-    country VARCHAR(50)
+    country VARCHAR(50),
     -- Ajoutez gestion SCD et autres colonnes
+    -- Colonnes SCD Type 2
+    valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
+    valid_to DATE,
+    is_current BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 -- Dimension Store (colonnes minimum)
@@ -29,8 +35,10 @@ CREATE TABLE dwh.dim_store (
     store_business_key INTEGER NOT NULL UNIQUE,
     store_name VARCHAR(200),
     city VARCHAR(100),
-    country VARCHAR(50)
+    country VARCHAR(50),
     -- Ajoutez autres colonnes
+    store_type VARCHAR(50),    -- ex: flagship, outlet
+    region VARCHAR(50)
 );
 
 -- Dimension Product (colonnes minimum)
@@ -39,8 +47,12 @@ CREATE TABLE dwh.dim_product (
     product_business_key INTEGER NOT NULL UNIQUE,
     product_name VARCHAR(300),
     category VARCHAR(100),
-    subcategory VARCHAR(100)
+    subcategory VARCHAR(100),
     -- Ajoutez autres colonnes
+    -- Colonnes SCD Type 2 (optionnel si produit change)
+    valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
+    valid_to DATE,
+    is_current BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 -- Fact Sales (structure EXACTE requise)
@@ -60,3 +72,10 @@ CREATE TABLE dwh.fact_sales (
     CONSTRAINT fk_sales_store FOREIGN KEY (store_key) REFERENCES dwh.dim_store(store_key),
     CONSTRAINT fk_sales_product FOREIGN KEY (product_key) REFERENCES dwh.dim_product(product_key)
 );
+
+
+-- Indexes pour optimiser les analyses
+CREATE INDEX idx_fact_sales_date ON dwh.fact_sales(date_key);
+CREATE INDEX idx_fact_sales_customer ON dwh.fact_sales(customer_key);
+CREATE INDEX idx_fact_sales_store ON dwh.fact_sales(store_key);
+CREATE INDEX idx_fact_sales_product ON dwh.fact_sales(product_key);
