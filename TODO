@@ -1,0 +1,7 @@
+☐ Staging -> DW -> Marts
+☐ Vérifier si c'est bien dans staging les sample data
+☐ Avoir une architecture de logs super
+☐ Gestion de SCD avec historisation complète
+☐ Indexation réfléchie + partionning, compression
+☐ ETL avec monitoring
+☐ Bonnes données réelles
