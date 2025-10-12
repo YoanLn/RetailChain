@@ -258,23 +258,24 @@ DECLARE
     v_count_customers BIGINT;
     v_count_products BIGINT;
     v_count_stores BIGINT;
+    rec RECORD;
 BEGIN
     -- Customers (SCD2)
-    FOR SELECT
-            customer_business_key, first_name, last_name, email, gender,
+    FOR rec IN
+        SELECT customer_business_key, first_name, last_name, email, gender,
             country, city, birth_date
         FROM staging.customers_raw
     LOOP
         PERFORM dwh.upsert_dim_customer_scd2(
             p_run_id, 
-            customers_raw.customer_business_key,
-            customers_raw.first_name,
-            customers_raw.last_name,
-            customers_raw.email,
-            customers_raw.gender,
-            customers_raw.country,
-            customers_raw.city,
-            customers_raw.birth_date
+            rec.customer_business_key,
+            rec.first_name,
+            rec.last_name,
+            rec.email,
+            rec.gender,
+            rec.country,
+            rec.city,
+            rec.birth_date
         );
     END LOOP;
 
@@ -282,40 +283,42 @@ BEGIN
     PERFORM dwh.log_metric(p_run_id, 'dim_customer_upserts', COALESCE(v_count_customers,0));
 
     -- Products (SCD2)
-    FOR SELECT
-            product_business_key, product_name, brand, category, subcategory, catalog_price
+    FOR rec IN
+        SELECT product_business_key, product_name, brand, category, subcategory, catalog_price
         FROM staging.products_raw
     LOOP
         PERFORM dwh.upsert_dim_product_scd2(
             p_run_id,
-            products_raw.product_business_key,
-            products_raw.product_name,
-            products_raw.brand,
-            products_raw.category,
-            products_raw.subcategory,
-            products_raw.catalog_price
+            rec.product_business_key,
+            rec.product_name,
+            rec.brand,
+            rec.category,
+            rec.subcategory,
+            rec.catalog_price
         );
     END LOOP;
+
 
     GET DIAGNOSTICS v_count_products = ROW_COUNT;
     PERFORM dwh.log_metric(p_run_id, 'dim_product_upserts', COALESCE(v_count_products,0));
 
     -- Stores (Type 1)
-    FOR SELECT
-            store_business_key, store_name, city, country, region, store_type, opening_date
+    FOR rec IN
+        SELECT store_business_key, store_name, city, country, region, store_type, opening_date
         FROM staging.stores_raw
     LOOP
         PERFORM dwh.upsert_dim_store_type1(
             p_run_id,
-            stores_raw.store_business_key,
-            stores_raw.store_name,
-            stores_raw.city,
-            stores_raw.country,
-            stores_raw.region,
-            stores_raw.store_type,
-            stores_raw.opening_date
+            rec.store_business_key,
+            rec.store_name,
+            rec.city,
+            rec.country,
+            rec.region,
+            rec.store_type,
+            rec.opening_date
         );
     END LOOP;
+
 
     GET DIAGNOSTICS v_count_stores = ROW_COUNT;
     PERFORM dwh.log_metric(p_run_id, 'dim_store_upserts', COALESCE(v_count_stores,0));
