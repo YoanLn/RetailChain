@@ -84,7 +84,7 @@ BEGIN
             country, city, birth_date, valid_from, valid_to, is_current
         ) VALUES (
             p_customer_business_key, p_first_name, p_last_name, p_email, p_gender,
-            p_country, p_city, p_birth_date, CURRENT_DATE, NULL, TRUE
+            p_country, p_city, p_birth_date, '1900-01-01', NULL, TRUE
         );
         PERFORM dwh.log_event(p_run_id, 'dim_customer', 'INFO', 'Inserted new customer BK='||p_customer_business_key);
     ELSE
@@ -167,7 +167,7 @@ BEGIN
             catalog_price, valid_from, valid_to, is_current
         ) VALUES (
             p_product_business_key, p_product_name, p_brand, p_category, p_subcategory,
-            p_catalog_price, CURRENT_DATE, NULL, TRUE
+            p_catalog_price, '1900-01-01', NULL, TRUE
         );
         PERFORM dwh.log_event(p_run_id, 'dim_product', 'INFO', 'Inserted new product BK='||p_product_business_key);
     ELSE
@@ -261,6 +261,10 @@ DECLARE
     rec RECORD;
 BEGIN
     -- Customers (SCD2)
+    -- Compter les lignes à traiter AVANT la boucle
+    SELECT COUNT(*) INTO v_count_customers FROM staging.customers_raw;
+    PERFORM dwh.log_metric(p_run_id, 'dim_customer_rows_processed', v_count_customers);
+    
     FOR rec IN
         SELECT customer_business_key, first_name, last_name, email, gender,
             country, city, birth_date
@@ -276,13 +280,13 @@ BEGIN
             rec.country,
             rec.city,
             rec.birth_date
-        );
+        );    
     END LOOP;
 
-    GET DIAGNOSTICS v_count_customers = ROW_COUNT;
-    PERFORM dwh.log_metric(p_run_id, 'dim_customer_upserts', COALESCE(v_count_customers,0));
-
     -- Products (SCD2)
+    SELECT COUNT(*) INTO v_count_products FROM staging.products_raw;
+    PERFORM dwh.log_metric(p_run_id, 'dim_product_rows_processed', v_count_products);
+
     FOR rec IN
         SELECT product_business_key, product_name, brand, category, subcategory, catalog_price
         FROM staging.products_raw
@@ -295,14 +299,13 @@ BEGIN
             rec.category,
             rec.subcategory,
             rec.catalog_price
-        );
+        );    
     END LOOP;
 
-
-    GET DIAGNOSTICS v_count_products = ROW_COUNT;
-    PERFORM dwh.log_metric(p_run_id, 'dim_product_upserts', COALESCE(v_count_products,0));
-
     -- Stores (Type 1)
+    SELECT COUNT(*) INTO v_count_stores FROM staging.stores_raw;
+    PERFORM dwh.log_metric(p_run_id, 'dim_store_rows_processed', v_count_stores);
+    
     FOR rec IN
         SELECT store_business_key, store_name, city, country, region, store_type, opening_date
         FROM staging.stores_raw
@@ -316,12 +319,8 @@ BEGIN
             rec.region,
             rec.store_type,
             rec.opening_date
-        );
+        );    
     END LOOP;
-
-
-    GET DIAGNOSTICS v_count_stores = ROW_COUNT;
-    PERFORM dwh.log_metric(p_run_id, 'dim_store_upserts', COALESCE(v_count_stores,0));
 
     PERFORM dwh.log_event(p_run_id, 'dimensions', 'INFO', 'Dimensions loaded from staging');
 EXCEPTION WHEN others THEN
@@ -329,6 +328,7 @@ EXCEPTION WHEN others THEN
     RAISE;
 END;
 $$ LANGUAGE plpgsql;
+
 
 -- ------------------------------------------
 -- Chargement de la fact table depuis staging
@@ -338,7 +338,6 @@ RETURNS VOID AS $$
 DECLARE
     v_inserted BIGINT;
 BEGIN
-    -- On construit une requête qui mappe les BK staging aux SK DWH et la date_key
     INSERT INTO dwh.fact_sales (
         date_key, customer_key, store_key, product_key,
         transaction_id, quantity, unit_price, total_amount, discount_amount
@@ -354,22 +353,36 @@ BEGIN
         sr.total_amount,
         sr.discount_amount
     FROM staging.sales_raw sr
+    
+    -- Jointure Date (simple)
     JOIN dwh.dim_date dd
       ON dd.full_date = sr.transaction_date
-    JOIN dwh.dim_customer dc
-      ON dc.customer_business_key = sr.customer_business_key
-     AND dc.is_current = TRUE
+      
+    -- Jointure Store (Type 1 - simple)
     JOIN dwh.dim_store ds
       ON ds.store_business_key = sr.store_business_key
+      
+    -- ==========================================================
+    -- Jointure SCD Type 2 (Corrigée) pour Customer
+    -- On joint sur la plage de date de validité
+    -- ==========================================================
+    JOIN dwh.dim_customer dc
+      ON dc.customer_business_key = sr.customer_business_key
+     AND sr.transaction_date BETWEEN dc.valid_from AND COALESCE(dc.valid_to, '9999-12-31')
+
+    -- ==========================================================
+    -- Jointure SCD Type 2 (Corrigée) pour Product
+    -- ==========================================================
     JOIN dwh.dim_product dp
       ON dp.product_business_key = sr.product_business_key
-     AND dp.is_current = TRUE
+     AND sr.transaction_date BETWEEN dp.valid_from AND COALESCE(dp.valid_to, '9999-12-31')
+     
+    -- Gestion des doublons
     ON CONFLICT (transaction_id, product_key) DO NOTHING;
 
     GET DIAGNOSTICS v_inserted = ROW_COUNT;
     PERFORM dwh.log_metric(p_run_id, 'fact_sales_inserted', COALESCE(v_inserted,0));
 
-    -- Qualité: métriques basiques
     PERFORM dwh.log_metric(p_run_id, 'fact_sales_count_total', (SELECT COUNT(*) FROM dwh.fact_sales));
     PERFORM dwh.log_event(p_run_id, 'fact_sales', 'INFO', 'Fact sales loaded from staging');
 EXCEPTION WHEN others THEN
@@ -446,13 +459,13 @@ BEGIN
           ON dd.full_date = sr.transaction_date
         JOIN dwh.dim_customer dc
           ON dc.customer_business_key = sr.customer_business_key
-         AND dc.is_current = TRUE
+          AND sr.transaction_date BETWEEN dc.valid_from AND COALESCE(dc.valid_to, '9999-12-31')        
         JOIN dwh.dim_store ds
           ON ds.store_business_key = sr.store_business_key
         JOIN dwh.dim_product dp
           ON dp.product_business_key = sr.product_business_key
-         AND dp.is_current = TRUE
-        WHERE sr.transaction_date BETWEEN p_from_date AND p_to_date
+          AND sr.transaction_date BETWEEN dp.valid_from AND COALESCE(dp.valid_to, '9999-12-31')        
+          WHERE sr.transaction_date BETWEEN p_from_date AND p_to_date
         ON CONFLICT (transaction_id, product_key) DO NOTHING;
 
         UPDATE dwh.etl_runs SET status = 'SUCCESS', ended_at = NOW() WHERE run_id = v_run_id;
@@ -466,3 +479,5 @@ BEGIN
     RETURN v_run_id;
 END;
 $$ LANGUAGE plpgsql;
+
+SELECT dwh.run_full_etl();
