@@ -20,6 +20,7 @@ Le projet inclut :
 ## 3. Structure du rendu
 
 Le projet respecte la structure de fichiers demandée :
+```
 NOM_Prenom_ProjetDW/
 ├── sql/
 │   ├── 01_setup.sql
@@ -33,6 +34,7 @@ NOM_Prenom_ProjetDW/
 │   ├── choix_techniques.md
 │   └── guide_utilisation.md
 └── README.md
+```
 
 ## 4. Comment l'utiliser ?
 
