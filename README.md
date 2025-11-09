@@ -14,7 +14,7 @@ Le projet inclut :
 ## 2. Contexte métier
 
 * **Entreprise :** RetailChain (50 magasins, 5 pays)
-* **Données :** 1000+ clients, 1000+ produits, 100 000+ transactions.
+* **Données :** 1000 clients, 1000 produits, 1 000 000 transactions.
 * **Objectifs :** Analyser les ventes, les tendances saisonnières et les performances des magasins.
 
 ## 3. Structure du rendu
@@ -53,7 +53,7 @@ Exécutez les scripts `01` à `05` dans l'ordre pour créer la structure et les 
 
 ### Étape 2 : Lancement de l'ETL (Chargement des données)
 
-Pour charger les 100 000 transactions du `staging` vers le `dwh` et mettre à jour les rapports, lancez les deux commandes suivantes :
+Pour charger les 1 000 000 transactions du `staging` vers le `dwh` et mettre à jour les rapports, lancez les deux commandes suivantes :
 
 ```sql
 -- 1. Charger les dimensions et les faits

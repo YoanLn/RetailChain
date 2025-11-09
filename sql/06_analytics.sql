@@ -1,3 +1,5 @@
+-- 06_analytics.sql -
+
 -- 1) CA et volume par mois et pays
 SELECT
     year_number,

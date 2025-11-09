@@ -75,28 +75,28 @@ CREATE INDEX IF NOT EXISTS idx_fact_sales_transaction_brin
 CREATE OR REPLACE FUNCTION dwh.refresh_all_marts()
 RETURNS VOID AS $$
 DECLARE
-    run_id BIGINT;
+    le_run_id BIGINT;
 BEGIN
     -- On loggue ce refresh dans notre table d'ETL
     INSERT INTO dwh.etl_runs (status, error_message) 
     VALUES ('RUNNING', 'Refreshing Marts') 
-    RETURNING run_id INTO run_id;
+    RETURNING run_id INTO le_run_id;
 
     BEGIN
-        PERFORM dwh.log_event(run_id, 'marts', 'INFO', 'Refreshing mv_monthly_sales_country...');
+        PERFORM dwh.log_event(le_run_id, 'marts', 'INFO', 'Refreshing mv_monthly_sales_country...');
         REFRESH MATERIALIZED VIEW marts.mv_monthly_sales_country;
         
-        PERFORM dwh.log_event(run_id, 'marts', 'INFO', 'Refreshing mv_top_products...');
+        PERFORM dwh.log_event(le_run_id, 'marts', 'INFO', 'Refreshing mv_top_products...');
         REFRESH MATERIALIZED VIEW marts.mv_top_products;
         
-        PERFORM dwh.log_event(run_id, 'marts', 'INFO', 'Refreshing mv_sales_store_region...');
+        PERFORM dwh.log_event(le_run_id, 'marts', 'INFO', 'Refreshing mv_sales_store_region...');
         REFRESH MATERIALIZED VIEW marts.mv_sales_store_region;
         
-        PERFORM dwh.log_event(run_id, 'marts', 'INFO', 'All Marts refreshed successfully.');
-        UPDATE dwh.etl_runs SET status = 'SUCCESS', ended_at = NOW() WHERE run_id = run_id;
+        PERFORM dwh.log_event(le_run_id, 'marts', 'INFO', 'All Marts refreshed successfully.');
+        UPDATE dwh.etl_runs SET status = 'SUCCESS', ended_at = NOW() WHERE run_id = le_run_id;
 
     EXCEPTION WHEN others THEN
-        UPDATE dwh.etl_runs SET status = 'FAILED', ended_at = NOW(), error_message = SQLERRM WHERE run_id = run_id;
+        UPDATE dwh.etl_runs SET status = 'FAILED', ended_at = NOW(), error_message = SQLERRM WHERE run_id = le_run_id;
         RAISE;
     END;
 END;

@@ -6,9 +6,9 @@ Ce document explique comment installer, charger et utiliser le data warehouse.
 
 * PostgreSQL version 16 ou supérieure.
 
-## 2. Installation (Mise en place initiale)
+## 2. Installation
 
-Pour construire le data warehouse de A à Z, il faut exécuter les scripts SQL du dossier `/sql` **une seule fois**, et **dans l'ordre suivant** :
+Pour construire le data warehouse de A à Z, il faut exécuter les scripts SQL du dossier `/sql` **une seule fois** et **dans l'ordre suivant** :
 
 1.  `01_setup.sql`
     * **Action :** Crée les trois schémas (`staging`, `dwh`, `marts`).

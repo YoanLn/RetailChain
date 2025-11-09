@@ -149,7 +149,7 @@ SELECT
     END::numeric(10,2) AS catalog_price
 FROM generate_series(1,1000) AS gs;
 
--- Transactions (uniforme par magasin, client même pays, produit uniforme)
+-- Transactions (uniforme par magasin, client même pays, produit uniforme) (1 million de lignes)
 -- Liste ordonnée des magasins + taille + décalage aléatoire
 WITH store_list AS (
     SELECT store_business_key, country, ROW_NUMBER() OVER () AS rn
@@ -182,7 +182,7 @@ SELECT
     (10 + random()*500)::numeric(10,2) AS unit_price,
     0.0 AS total_amount,
     (CASE WHEN random() < 0.3 THEN (random()*15)::numeric(10,2) ELSE 0 END) AS discount_amount
-FROM generate_series(1, 100000) gs
+FROM generate_series(1, 1000000) gs
 JOIN store_count sc ON true
 JOIN rand_offset ro ON true
 JOIN store_list s

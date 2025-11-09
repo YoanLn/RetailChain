@@ -392,11 +392,11 @@ BEGIN
         -- Étape 2: Charger la fact table
         PERFORM dwh.load_fact_sales_from_staging(v_run_id);
 
-        -- Fin OK
+        -- Fin
         UPDATE dwh.etl_runs SET status = 'SUCCESS', ended_at = NOW() WHERE run_id = v_run_id;
         PERFORM dwh.log_event(v_run_id, 'etl', 'INFO', 'ETL run finished successfully');
     EXCEPTION WHEN others THEN
-        -- Gestion d’erreurs globale
+        -- Gestion d’erreurs
         UPDATE dwh.etl_runs SET status = 'FAILED', ended_at = NOW(), error_message = SQLERRM WHERE run_id = v_run_id;
         PERFORM dwh.log_event(v_run_id, 'etl', 'ERROR', SQLERRM);
         RAISE;
