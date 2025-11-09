@@ -37,7 +37,8 @@ On a créé des fonctions pour chaque étape, orchestrées par `dwh.run_full_etl
 * **Chargement Dimensions (SCD) :**
     * Pour le SCD Type 1 (`dim_store`), on utilise `INSERT ... ON CONFLICT` (expliqué au-dessus).
     * Pour le SCD Type 2 (`dim_customer`, `dim_product`), on utilise une boucle `FOR ... LOOP` dans la fonction PL/pgSQL. On vérifie si une ligne a changé avec `IS DISTINCT FROM`.
-    * **Justification :** On aurait pu essayer de faire une grosse requête "set-based" (tout en SQL), mais la logique du SCD Type 2 (fermer l'ancien, ouvrir le nouveau) est beaucoup plus claire et facile à débugger en PL/pgSQL. Le volume des dimensions (1000 clients, 1000 produits) est faible, donc cette approche en boucle est largement assez performante. Pour le premier chargement, on met valid_from = '1900-01-01' pour être sûr que les transactions passées (de 2022-2023) trouvent bien une dimension valide.
+    * **Justification :** On aurait pu essayer de faire une grosse requête "set-based" (tout en SQL), mais la logique du SCD Type 2 (fermer l'ancien, ouvrir le nouveau) est beaucoup plus claire et facile à débugger en PL/pgSQL. Le volume des dimensions (1000 clients, 1000 produits) est faible, donc cette approche en boucle est largement assez performante. 
+    * **Gestion de l'historique :** Pour que notre jointure BETWEEN (dans le script 04) fonctionne avec les données du passé (2022-2023), on a mis DEFAULT '1900-01-01' sur la colonne valid_from directement dans le script 02_create_tables.sql.
 
 * **Chargement des Faits (`fact_sales`) :**
     * **Choix :** On utilise une seule grosse requête `INSERT ... SELECT ...` qui fait les jointures entre `staging.sales_raw` et les dimensions.

@@ -82,7 +82,8 @@ FROM price_qty
 ORDER BY category, price_bucket;
 
 
--- 6) Cohortes: première commande et rétention mensuelle par cohorte
+-- 6) Analyse de cohorte (Rétention des clients)
+-- Etape 1: Trouver le 1er mois d'achat de chaque client (= sa cohorte)
 WITH first_order AS (
   SELECT
     f.customer_key,
@@ -91,6 +92,7 @@ WITH first_order AS (
   JOIN dwh.dim_date d ON f.date_key = d.date_key
   GROUP BY f.customer_key
 ),
+-- Etape 2: Lister tous les mois où les clients ont acheté
 activity AS (
   SELECT
     f.customer_key,
@@ -98,7 +100,8 @@ activity AS (
   FROM dwh.fact_sales f
   JOIN dwh.dim_date d ON f.date_key = d.date_key
 ),
-cohort_matrix AS (
+-- Etape 3: Combiner les deux
+matrice_cohorte AS (
   SELECT
     fo.cohort_ym,
     a.order_ym,
@@ -106,17 +109,20 @@ cohort_matrix AS (
   FROM first_order fo
   JOIN activity a ON a.customer_key = fo.customer_key
 )
+-- Etape 4: Compter
 SELECT
   cohort_ym,
   month_offset,
+  -- Le COUNT(DISTINCT CONCAT(...)) est pour compter les événements uniques
   COUNT(DISTINCT CONCAT(cohort_ym, '-', month_offset, '-', order_ym, '-', cohort_ym)) AS active_events,
   COUNT(DISTINCT (SELECT customer_key FROM first_order fo2 WHERE fo2.cohort_ym = cohort_ym)) AS cohort_size
-FROM cohort_matrix
+FROM matrice_cohorte
 GROUP BY cohort_ym, month_offset
 ORDER BY cohort_ym, month_offset;
 
 
 -- 7) RFM: segmentation clients
+-- Etape 1: Calculer R, F, et M pour chaque client
 WITH base AS (
   SELECT
     f.customer_key,
@@ -127,6 +133,7 @@ WITH base AS (
   JOIN dwh.dim_date d ON f.date_key = d.date_key
   GROUP BY f.customer_key
 ),
+-- Etape 2: Calculer les scores (quintiles = 5 groupes)
 ranks AS (
   SELECT
     customer_key,
@@ -138,6 +145,7 @@ ranks AS (
     NTILE(5) OVER (ORDER BY monetary DESC) AS m_score
   FROM base
 )
+-- Etape 3: Compter les clients dans chaque segment
 SELECT
   r_score, f_score, m_score,
   COUNT(*) AS nb_customers,

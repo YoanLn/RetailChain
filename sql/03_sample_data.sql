@@ -1,6 +1,4 @@
--- ============================================
--- 03_sample_data.sql (version robuste)
--- ============================================
+-- 03_sample_data.sql -
 
 CREATE SCHEMA IF NOT EXISTS staging;
 
@@ -51,10 +49,7 @@ CREATE TABLE staging.sales_raw (
     discount_amount DECIMAL(10,2)
 );
 
--- ============================================
--- Dates
--- ============================================
-
+-- Fonction pour dim_date (FOURNIE - ne pas modifier)
 CREATE OR REPLACE FUNCTION dwh.populate_test_date(start_date DATE, end_date DATE)
 RETURNS VOID AS $$
 DECLARE
@@ -82,17 +77,13 @@ $$ LANGUAGE plpgsql;
 
 SELECT dwh.populate_test_date('2022-01-01', '2023-12-31');
 
--- ============================================
 -- Enrichissement dim_date
--- ============================================
-
 -- Met à jour les colonnes supplémentaires après la génération de base
 UPDATE dwh.dim_date
 SET 
     day_name = TRIM(TO_CHAR(full_date, 'Day')),
     week_number = EXTRACT(WEEK FROM full_date),
-    -- On simule les jours fériés (ex: 1er Janvier, 25 Décembre)
-    -- Une vraie solution utiliserait une table de jours fériés par pays
+    -- On simule quelques jours fériés réeeles pour la cohérence des données (ex: 1er Janvier, 25 Décembre)
     is_holiday = CASE 
         WHEN EXTRACT(MONTH FROM full_date) = 1 AND EXTRACT(DAY FROM full_date) = 1 THEN TRUE
         WHEN EXTRACT(MONTH FROM full_date) = 5 AND EXTRACT(DAY FROM full_date) = 1 THEN TRUE  -- Fête du travail
@@ -102,10 +93,7 @@ SET
     END
 WHERE day_name IS NULL; -- Pour éviter de le faire plusieurs fois
 
--- ============================================
 -- Clients (200 par pays, 1000 total)
--- ============================================
-
 INSERT INTO staging.customers_raw
 SELECT
     ((c.ord - 1) * 200 + gs) AS customer_business_key,
@@ -125,10 +113,7 @@ SELECT
 FROM unnest(ARRAY['France','Germany','Italy','Spain','Belgium']) WITH ORDINALITY c(country, ord)
 CROSS JOIN generate_series(1,200) gs;
 
--- ============================================
 -- Magasins (10 par pays, 50 total)
--- ============================================
-
 INSERT INTO staging.stores_raw
 SELECT
     ((c.ord - 1) * 10 + gs) AS store_business_key,
@@ -147,16 +132,13 @@ SELECT
 FROM unnest(ARRAY['France','Germany','Italy','Spain','Belgium']) WITH ORDINALITY c(country, ord)
 CROSS JOIN generate_series(1,10) gs;
 
--- ============================================
 -- Produits (1000)
--- ============================================
-
 INSERT INTO staging.products_raw
 SELECT
     gs AS product_business_key,
     'Product ' || gs AS product_name,
     (ARRAY['BrandA','BrandB','BrandC','BrandD'])[1 + floor(random()*4)::int] AS brand,
-    (ARRAY['Electronics','Clothing','Food','Toys','Home'])[1 + floor(random()*5)::int] AS category,  -- corrige la catégorie: tirage par ligne
+    (ARRAY['Electronics','Clothing','Food','Toys','Home'])[1 + floor(random()*5)::int] AS category, 
     (ARRAY['A','B','C','D','E'])[1 + floor(random()*5)::int] AS subcategory,
     CASE (ARRAY['Electronics','Clothing','Food','Toys','Home'])[1 + floor(random()*5)::int]
         WHEN 'Electronics' THEN (100 + random()*1900)
@@ -167,12 +149,7 @@ SELECT
     END::numeric(10,2) AS catalog_price
 FROM generate_series(1,1000) AS gs;
 
--- Option: si tu préfères garder cohérence prix-catégorie, remplace CASE ci-dessus par CASE category.
-
--- ============================================
 -- Transactions (uniforme par magasin, client même pays, produit uniforme)
--- ============================================
-
 -- Liste ordonnée des magasins + taille + décalage aléatoire
 WITH store_list AS (
     SELECT store_business_key, country, ROW_NUMBER() OVER () AS rn

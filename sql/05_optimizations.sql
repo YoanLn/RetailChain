@@ -1,11 +1,6 @@
--- ============================================
--- 05_optimisations.sql
--- Optimisations de performance pour le DWH
--- ============================================
+-- 05_optimisations.sql -
 
--- --------------------------------------------
 -- 1. Indexation avancée
--- --------------------------------------------
 
 -- Index composites pour accélérer les requêtes analytiques fréquentes
 -- Exemple : requêtes par date + produit
@@ -24,9 +19,8 @@ CREATE INDEX IF NOT EXISTS idx_fact_sales_customer_date
 CREATE INDEX IF NOT EXISTS idx_customer_city ON dwh.dim_customer(city);
 CREATE INDEX IF NOT EXISTS idx_product_brand ON dwh.dim_product(brand);
 
--- --------------------------------------------
--- 2. Vues matérialisées pour agrégations métier
--- --------------------------------------------
+
+-- 2. Vues matérialisées (les "marts")
 
 -- Ventes mensuelles par pays
 CREATE MATERIALIZED VIEW IF NOT EXISTS marts.mv_monthly_sales_country AS
@@ -64,49 +58,45 @@ FROM dwh.fact_sales f
 JOIN dwh.dim_store s ON f.store_key = s.store_key
 GROUP BY s.region, s.store_name;
 
--- --------------------------------------------
--- 3. Optimisation avancée : Index BRIN
--- --------------------------------------------
 
--- Les tables de faits volumineuses sont souvent ordonnées par date.
--- Un index BRIN sur date_key permet des scans rapides avec un coût faible.
+-- 3. Index BRIN 
+
+-- Index BRIN sur la date, car les requêtes filtrent souvent sur des plages de dates.
 CREATE INDEX IF NOT EXISTS idx_fact_sales_date_brin
     ON dwh.fact_sales USING BRIN(date_key);
 
--- On peut aussi créer un BRIN sur transaction_id si les données sont séquentielles
+-- Index BRIN sur l'ID de transaction, car il est séquentiel (vient du generate_series).
 CREATE INDEX IF NOT EXISTS idx_fact_sales_transaction_brin
     ON dwh.fact_sales USING BRIN(transaction_id);
 
--- ============================================
--- 5. Fonction de rafraîchissement des Marts
--- ============================================
+
+-- 4. Fonction de rafraîchissement des Marts
 
 CREATE OR REPLACE FUNCTION dwh.refresh_all_marts()
 RETURNS VOID AS $$
 DECLARE
-    v_start_time TIMESTAMPTZ := clock_timestamp();
-    v_run_id BIGINT;
+    run_id BIGINT;
 BEGIN
-    -- Optionnel: on peut même logguer ce refresh dans notre table d'ETL
+    -- On loggue ce refresh dans notre table d'ETL
     INSERT INTO dwh.etl_runs (status, error_message) 
     VALUES ('RUNNING', 'Refreshing Marts') 
-    RETURNING run_id INTO v_run_id;
+    RETURNING run_id INTO run_id;
 
     BEGIN
-        PERFORM dwh.log_event(v_run_id, 'marts', 'INFO', 'Refreshing mv_monthly_sales_country...');
+        PERFORM dwh.log_event(run_id, 'marts', 'INFO', 'Refreshing mv_monthly_sales_country...');
         REFRESH MATERIALIZED VIEW marts.mv_monthly_sales_country;
         
-        PERFORM dwh.log_event(v_run_id, 'marts', 'INFO', 'Refreshing mv_top_products...');
+        PERFORM dwh.log_event(run_id, 'marts', 'INFO', 'Refreshing mv_top_products...');
         REFRESH MATERIALIZED VIEW marts.mv_top_products;
         
-        PERFORM dwh.log_event(v_run_id, 'marts', 'INFO', 'Refreshing mv_sales_store_region...');
+        PERFORM dwh.log_event(run_id, 'marts', 'INFO', 'Refreshing mv_sales_store_region...');
         REFRESH MATERIALIZED VIEW marts.mv_sales_store_region;
         
-        PERFORM dwh.log_event(v_run_id, 'marts', 'INFO', 'All Marts refreshed successfully.');
-        UPDATE dwh.etl_runs SET status = 'SUCCESS', ended_at = NOW() WHERE run_id = v_run_id;
+        PERFORM dwh.log_event(run_id, 'marts', 'INFO', 'All Marts refreshed successfully.');
+        UPDATE dwh.etl_runs SET status = 'SUCCESS', ended_at = NOW() WHERE run_id = run_id;
 
     EXCEPTION WHEN others THEN
-        UPDATE dwh.etl_runs SET status = 'FAILED', ended_at = NOW(), error_message = SQLERRM WHERE run_id = v_run_id;
+        UPDATE dwh.etl_runs SET status = 'FAILED', ended_at = NOW(), error_message = SQLERRM WHERE run_id = run_id;
         RAISE;
     END;
 END;
